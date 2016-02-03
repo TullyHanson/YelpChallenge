@@ -20,7 +20,7 @@ def findRestaurants(businessFile):
     return restaurantArray
 
 
-def createAttributeFeatureArray(restaurantArray):
+def findDirtyAttributeList(restaurantArray):
 
     attributeArray = []
     for line in restaurantArray:
@@ -29,9 +29,30 @@ def createAttributeFeatureArray(restaurantArray):
         stringStartPos = matchText.start(1)
 
         #Sanity check to make sure we're getting the text containing all the attributes
-        #print(line[stringStartPos-1:-21])
+        #print(line[stringStartPos+13:-21])
+        # Add the list of attributes to the array
+        attributeArray.append(line[stringStartPos+13:-21])
 
     return attributeArray
+
+
+def parseForAttributes(dirtyAttributeArray):
+
+    for line in dirtyAttributeArray:
+        lineLength = len(line)
+        iterator = 0
+
+        tempString = ""
+
+        # This is where we want to parse the attribute list for the separate attributes.
+        # Slightly more complicated because attributes can either be:
+        # "<attribute>": <bool>,      or  "<attribute>": {"<subattribute>": <bool>, ...}
+        # It may be easier to run through all the attributes once, only grabbing those enclosed in " ",
+        # and add it to a hashset so we can find all unique attributes.
+        # Then, run through again and for each line find which of those unique attributes it contains...
+        while iterator < lineLength:
+            iterator += 1
+
 
 
 def createTargetArray(restaurantArray):
@@ -57,5 +78,5 @@ if __name__ == '__main__':
     businessFile = open(os.getcwd() + "\\yelp_academic_dataset_business.json", "r")
     restaurantArray = findRestaurants(businessFile)
 
-    attributeArray = createAttributeFeatureArray(restaurantArray)
+    dirtyAttributeArray = findDirtyAttributeList(restaurantArray)
     starTargetArray = createTargetArray(restaurantArray)
