@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import re
+import time
 
 #Take a subset of businesses that meet category == restaurant
 def findRestaurants(businessFile):
@@ -36,17 +37,65 @@ def findDirtyAttributeList(restaurantArray):
     return dirtyAttributeArray
 
 
+# This is where we want to parse the attribute list for the separate attributes.
+# Slightly more complicated because attributes can either be:
+# "<attribute>": <bool>,      or  "<attribute>": {"<subattribute>": <bool>, ...}
+# It may be easier to run through all the attributes once, only grabbing those enclosed in " ",
+# and add it to a hashset so we can find all unique attributes.
+# Then, run through again and for each line find which of those unique attributes it contains...
 def parseForAttributes(dirtyAttributeArray):
 
-    for line in dirtyAttributeArray:
+    attributeMatrix = []
 
-        print(line)
-        # This is where we want to parse the attribute list for the separate attributes.
-        # Slightly more complicated because attributes can either be:
-        # "<attribute>": <bool>,      or  "<attribute>": {"<subattribute>": <bool>, ...}
-        # It may be easier to run through all the attributes once, only grabbing those enclosed in " ",
-        # and add it to a hashset so we can find all unique attributes.
-        # Then, run through again and for each line find which of those unique attributes it contains...
+    for line in dirtyAttributeArray:
+        attributeName = ""
+        attributeValue = ""
+
+        attributeFound = False
+        attributeNested = False
+
+        attributeList = []
+        currentAttribute = []
+
+        thisChar_iter = iter(line)
+        for thisChar in thisChar_iter:
+            if attributeNested:
+                if thisChar != '}':
+                    attributeValue += thisChar
+                else:
+                    currentAttribute.append(attributeValue)
+                    attributeValue = ""
+                    attributeList.append(currentAttribute)
+                    currentAttribute = []
+                    attributeFound = False
+                    attributeNested = False
+                    next(thisChar_iter, None)
+                    next(thisChar_iter, None)
+            elif not attributeFound:
+                if thisChar != ':':
+                    attributeName += thisChar
+                else:
+                    attributeFound = True
+                    currentAttribute.append(attributeName)
+                    attributeName = ""
+                    next(thisChar_iter, None)
+            else:
+                if thisChar == '{':
+                    attributeNested = True
+                elif thisChar != ',':
+                    attributeValue += thisChar
+                else:
+                    currentAttribute.append(attributeValue)
+                    attributeValue = ""
+                    attributeList.append(currentAttribute)
+                    currentAttribute = []
+                    attributeFound = False
+                    next(thisChar_iter, None)
+
+        attributeMatrix.append(attributeList)
+
+    return attributeMatrix
+
 
 def determineUnique(attributeArray):
 
@@ -84,6 +133,6 @@ if __name__ == '__main__':
     dirtyAttributeArray = findDirtyAttributeList(restaurantArray)
     attributeArray = parseForAttributes(dirtyAttributeArray)
 
-    uniqueAttributes = determineUnique(attributeArray)
+    #uniqueAttributes = determineUnique(attributeArray)
 
     starTargetArray = createTargetArray(restaurantArray)
