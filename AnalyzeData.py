@@ -22,7 +22,7 @@ def findRestaurants(businessFile):
 
 def findDirtyAttributeList(restaurantArray):
 
-    attributeArray = []
+    dirtyAttributeArray = []
     for line in restaurantArray:
         # Finds the match for the text "attributes" in the given line
         matchText = re.search(r"[^a-zA-Z](attributes)[^a-zA-Z]", line)
@@ -31,27 +31,22 @@ def findDirtyAttributeList(restaurantArray):
         #Sanity check to make sure we're getting the text containing all the attributes
         #print(line[stringStartPos+13:-21])
         # Add the list of attributes to the array
-        attributeArray.append(line[stringStartPos+13:-21])
+        dirtyAttributeArray.append(line[stringStartPos+14:-22].replace("\"", ""))
 
-    return attributeArray
+    return dirtyAttributeArray
 
 
 def parseForAttributes(dirtyAttributeArray):
 
     for line in dirtyAttributeArray:
-        lineLength = len(line)
-        iterator = 0
 
-        tempString = ""
-
+        print(line)
         # This is where we want to parse the attribute list for the separate attributes.
         # Slightly more complicated because attributes can either be:
         # "<attribute>": <bool>,      or  "<attribute>": {"<subattribute>": <bool>, ...}
         # It may be easier to run through all the attributes once, only grabbing those enclosed in " ",
         # and add it to a hashset so we can find all unique attributes.
         # Then, run through again and for each line find which of those unique attributes it contains...
-        while iterator < lineLength:
-            iterator += 1
 
 
 
@@ -79,4 +74,5 @@ if __name__ == '__main__':
     restaurantArray = findRestaurants(businessFile)
 
     dirtyAttributeArray = findDirtyAttributeList(restaurantArray)
+    attributeArray = parseForAttributes(dirtyAttributeArray)
     starTargetArray = createTargetArray(restaurantArray)
