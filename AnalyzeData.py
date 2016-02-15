@@ -48,6 +48,14 @@ def parseForAttributes(dirtyAttributeArray):
         # and add it to a hashset so we can find all unique attributes.
         # Then, run through again and for each line find which of those unique attributes it contains...
 
+def determineUnique(attributeArray):
+
+    unique = set()
+    for line in attributeArray:
+        if not unique.__contains__(line):
+            unique.add(line)
+
+    return unique
 
 
 def createTargetArray(restaurantArray):
@@ -75,4 +83,7 @@ if __name__ == '__main__':
 
     dirtyAttributeArray = findDirtyAttributeList(restaurantArray)
     attributeArray = parseForAttributes(dirtyAttributeArray)
+
+    uniqueAttributes = determineUnique(attributeArray)
+
     starTargetArray = createTargetArray(restaurantArray)
