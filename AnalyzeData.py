@@ -120,7 +120,7 @@ def createTargetArray(restaurantArray):
         targetArray.append(line[stringStartPos+8 : stringStartPos + 11])
 
         # Sanity check to make sure that we are grabbing the correct part of the string
-        #print(line[matchText.start(1)+8 : matchText.start(1) + 11])
+        print(line[matchText.start(1)+8 : matchText.start(1) + 11])
     return targetArray
 
 
@@ -128,7 +128,7 @@ def createTargetArray(restaurantArray):
 if __name__ == '__main__':
 
     #Load in business file
-    businessFile = open(os.getcwd() + "\\yelp_academic_dataset_business.json", "r")
+    businessFile = open(os.getcwd() + "/yelp_academic_dataset_business.json", "r")
     restaurantArray = findRestaurants(businessFile)
 
     dirtyAttributeArray = findDirtyAttributeList(restaurantArray)
