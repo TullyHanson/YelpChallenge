@@ -30,7 +30,7 @@ def findDirtyAttributeList(restaurantArray):
         stringStartPos = matchText.start(1)
 
         #Sanity check to make sure we're getting the text containing all the attributes
-        #print(line[stringStartPos+13:-21])
+        #print(line[stringStartPos+14:-22].replace("\"", ""))
         # Add the list of attributes to the array
         dirtyAttributeArray.append(line[stringStartPos+14:-22].replace("\"", ""))
 
@@ -92,6 +92,7 @@ def parseForAttributes(dirtyAttributeArray):
                     attributeFound = False
                     next(thisChar_iter, None)
 
+
         attributeMatrix.append(attributeList)
 
     return attributeMatrix
@@ -119,7 +120,7 @@ def createTargetArray(restaurantArray):
         targetArray.append(line[stringStartPos+8 : stringStartPos + 11])
 
         # Sanity check to make sure that we are grabbing the correct part of the string
-        #print(line[matchText.start(1)-1 : matchText.start(1) + 11])
+        #print(line[matchText.start(1)+8 : matchText.start(1) + 11])
     return targetArray
 
 
