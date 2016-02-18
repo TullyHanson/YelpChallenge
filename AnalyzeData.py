@@ -1,13 +1,10 @@
-import numpy as np
 import matplotlib.pyplot as plt
 import os
 import re
-import time
-from itertools import islice
+
 
 #Take a subset of businesses that meet category == restaurant
 def findRestaurants(businessFile):
-
     restaurantArray = []
     #Read in the first line
     currentLine = businessFile.readline()
@@ -23,7 +20,6 @@ def findRestaurants(businessFile):
 
 
 def findDirtyAttributeList(restaurantArray):
-
     dirtyAttributeArray = []
     for line in restaurantArray:
         # Finds the match for the text "attributes" in the given line
@@ -39,7 +35,6 @@ def findDirtyAttributeList(restaurantArray):
 
 
 def parseNestedAttributes(attributeList, currentLine):
-
     attributeFound = False
     finishedNested = False
 
@@ -48,6 +43,9 @@ def parseNestedAttributes(attributeList, currentLine):
     currentAttribute = []
 
     i = 0
+    if currentLine[i] == '}':
+        return 2
+
     while not finishedNested:
         if not attributeFound:
             if currentLine[i] != ':':
@@ -62,7 +60,6 @@ def parseNestedAttributes(attributeList, currentLine):
                 finishedNested = True
                 currentAttribute.append(attributeValue)
                 attributeList.append(currentAttribute)
-                print(currentAttribute)
                 i += 1
             elif currentLine[i] != ',':
                 attributeValue += currentLine[i]
@@ -70,13 +67,13 @@ def parseNestedAttributes(attributeList, currentLine):
                 currentAttribute.append(attributeValue)
                 attributeValue = ""
                 attributeList.append(currentAttribute)
-                print(currentAttribute)
                 currentAttribute = []
                 attributeFound = False
                 i += 1
         i += 1
 
     return i
+
 
 # This is where we want to parse the attribute list for the separate attributes.
 # Slightly more complicated because attributes can either be:
@@ -85,7 +82,6 @@ def parseNestedAttributes(attributeList, currentLine):
 # and add it to a hashset so we can find all unique attributes.
 # Then, run through again and for each line find which of those unique attributes it contains...
 def parseForAttributes(dirtyAttributeArray):
-
     attributeMatrix = []
 
     for line in dirtyAttributeArray:
@@ -97,11 +93,10 @@ def parseForAttributes(dirtyAttributeArray):
         attributeList = []
         currentAttribute = []
 
-        print(line)
-        print("")
-
         i = 0
         while i in range(0, len(line)):
+            if attributeName == "}, Outdoor Seating":
+                print(i)
             if not attributeFound:
                 if line[i] != ':':
                     attributeName += line[i]
@@ -113,57 +108,103 @@ def parseForAttributes(dirtyAttributeArray):
             else:
                 if line[i] == '{':
                     currentAttribute = []
-                    print("------ NESTED -------")
                     numberAhead = parseNestedAttributes(attributeList, line[i+1:])
                     i += numberAhead + 1
-                    print("------ END -------")
                     attributeFound = False
-                elif line[i] == '}': #Special case: At end of line (grab Attribute 'name' and 'value')
+                    attributeName = ""
+
+                #Special case: At end of line (grab Attribute 'name' and 'value')
+                elif line[i] == '}':
                     currentAttribute.append(attributeValue)
                     attributeList.append(currentAttribute)
-                    print(currentAttribute)
+                    i += 1
                 elif line[i] != ',':
                     attributeValue += line[i]
                 else:
                     currentAttribute.append(attributeValue)
-                    attributeValue = ""
                     attributeList.append(currentAttribute)
-                    print(currentAttribute)
                     currentAttribute = []
+                    attributeValue = ""
                     attributeFound = False
                     i += 1
             i += 1
-        print("")
         attributeMatrix.append(attributeList)
 
     return attributeMatrix
 
 
-def determineUnique(attributeArray):
-
+def determineUnique(attributeMatrix, restaurantArray):
     unique = set()
-    for line in attributeArray:
-        if not unique.__contains__(line):
-            unique.add(line)
+    for i, restaurant in enumerate(attributeMatrix):
+        for attributes in restaurant:
+            if not unique.__contains__(attributes[0]):
+                unique.add(attributes[0])
 
     return unique
 
 
 def createTargetArray(restaurantArray):
-
     targetArray = []
     for line in restaurantArray:
         # Finds the match for the text "stars" in the given line
-        matchText = re.search(r"[^a-zA-Z](stars)[^a-zA-Z]", line)
+        matchText = re.search(r"[^a-zA-Z](\"stars\":)[^a-zA-Z]", line)
         stringStartPos = matchText.start(1)
 
+        starRating = line[stringStartPos+9 : stringStartPos + 12]
+        floatRating = float(starRating)
+
         # Using the above start position, increments slightly forward past the text and only grabs the star rating
-        targetArray.append(line[stringStartPos+8 : stringStartPos + 11])
+        targetArray.append(floatRating)
 
         # Sanity check to make sure that we are grabbing the correct part of the string
         #print(line[matchText.start(1)+8 : matchText.start(1) + 11])
     return targetArray
 
+def determineNumAttributes(attributeMatrix):
+    numberOfAttributes = []
+
+    for restaurant in attributeMatrix:
+        numberOfAttributes.append(float(len(restaurant)))
+
+    return numberOfAttributes
+
+def determineDecencyAttributes(numberOfAttributes, starTargetArray):
+
+    attributeNumGood = []
+    attributeNumBad = []
+
+    for i in range(0, 63):
+        good = 0
+        bad = 0
+        for index, currentNum in enumerate(numberOfAttributes):
+            if currentNum == i:
+                if starTargetArray[index] >= 4.0:
+                    good += 1
+                elif starTargetArray[index] <= 2.0:
+                    bad += 1
+        attributeNumGood.append(good)
+        attributeNumBad.append(bad)
+
+    return attributeNumGood, attributeNumBad
+
+
+def plotTesting(numberOfAttributes, starTargetArray):
+    attributeNumGood, attributeNumBad = determineDecencyAttributes(numberOfAttributes, starTargetArray)
+
+    attributeX = []
+    for i in range (0, 63):
+        attributeX.append(i)
+
+    percentGood = []
+    for i in range(0, 63):
+        denominator = attributeNumGood[i] + attributeNumBad[i]
+        if denominator == 0:
+            percentGood.append(0)
+        else:
+            percentGood.append(attributeNumGood[i] / denominator)
+
+    plt.scatter(attributeX, percentGood)
+    plt.show()
 
 
 if __name__ == '__main__':
@@ -173,8 +214,12 @@ if __name__ == '__main__':
     restaurantArray = findRestaurants(businessFile)
 
     dirtyAttributeArray = findDirtyAttributeList(restaurantArray)
-    attributeArray = parseForAttributes(dirtyAttributeArray)
+    attributeMatrix = parseForAttributes(dirtyAttributeArray)
 
-    #uniqueAttributes = determineUnique(attributeArray)
+    uniqueAttributes = determineUnique(attributeMatrix, restaurantArray)
 
+    numberOfAttributes = determineNumAttributes(attributeMatrix)
     starTargetArray = createTargetArray(restaurantArray)
+
+    #plotTesting(numberOfAttributes, starTargetArray)
+

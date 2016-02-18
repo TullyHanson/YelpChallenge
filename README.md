@@ -6,7 +6,7 @@ The goal for this project is to determine whether the success of a restaurant ca
 Using logistic regression, I hope to create a learner that can predict whether a restaurant will fall into one of two categories: Succesful (4 or 5 stars) or Unsuccesful (1 or 2 stars), using only the attributes listed on its Yelp portfolio. 
 
 # To Do:
-- Parse for individual attributes in each line.
-- Using above attribute list, create a comprehensive attribute list
-- Create a Restaurant by Attribute feature matrix that describes, for each restaurant, which attributes it contains
+- ~~Parse for individual attributes in each line.~~
+- ~~Using above attribute list, create a comprehensive attribute list~~
+- ~~Create a Restaurant by Attribute feature matrix that describes, for each restaurant, which attributes it contains~~
 - Partition feature vector/target vector into training and test data
