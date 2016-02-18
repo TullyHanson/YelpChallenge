@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import os
 import re
 import time
+from itertools import islice
 
 #Take a subset of businesses that meet category == restaurant
 def findRestaurants(businessFile):
@@ -37,6 +38,46 @@ def findDirtyAttributeList(restaurantArray):
     return dirtyAttributeArray
 
 
+def parseNestedAttributes(attributeList, currentLine):
+
+    attributeFound = False
+    finishedNested = False
+
+    attributeName = ""
+    attributeValue = ""
+    currentAttribute = []
+
+    i = 0
+    while not finishedNested:
+        if not attributeFound:
+            if currentLine[i] != ':':
+                attributeName += currentLine[i]
+            else:
+                attributeFound = True
+                currentAttribute.append(attributeName)
+                attributeName = ""
+                i += 1
+        else:
+            if currentLine[i] == '}':
+                finishedNested = True
+                currentAttribute.append(attributeValue)
+                attributeList.append(currentAttribute)
+                print(currentAttribute)
+                i += 1
+            elif currentLine[i] != ',':
+                attributeValue += currentLine[i]
+            else:
+                currentAttribute.append(attributeValue)
+                attributeValue = ""
+                attributeList.append(currentAttribute)
+                print(currentAttribute)
+                currentAttribute = []
+                attributeFound = False
+                i += 1
+        i += 1
+
+    return i
+
 # This is where we want to parse the attribute list for the separate attributes.
 # Slightly more complicated because attributes can either be:
 # "<attribute>": <bool>,      or  "<attribute>": {"<subattribute>": <bool>, ...}
@@ -52,50 +93,47 @@ def parseForAttributes(dirtyAttributeArray):
         attributeValue = ""
 
         attributeFound = False
-        attributeNested = False
 
         attributeList = []
         currentAttribute = []
 
-        thisChar_iter = iter(line)
-        for thisChar in thisChar_iter:
-            if attributeNested:
-                if thisChar != '}':
-                    attributeValue += thisChar
-                else:
-                    currentAttribute.append(attributeValue)
-                    attributeValue = ""
-                    attributeList.append(currentAttribute)
-                    currentAttribute = []
-                    attributeFound = False
-                    attributeNested = False
-                    next(thisChar_iter, None)
-                    next(thisChar_iter, None)
-            elif not attributeFound:
-                if thisChar != ':':
-                    attributeName += thisChar
+        print(line)
+        print("")
+
+        i = 0
+        while i in range(0, len(line)):
+            if not attributeFound:
+                if line[i] != ':':
+                    attributeName += line[i]
                 else:
                     attributeFound = True
                     currentAttribute.append(attributeName)
                     attributeName = ""
-                    next(thisChar_iter, None)
+                    i += 1
             else:
-                if thisChar == '{':
-                    attributeNested = True
-                elif thisChar == '}': #Special case: At end of line (grab Attribute 'name' and 'value')
+                if line[i] == '{':
+                    currentAttribute = []
+                    print("------ NESTED -------")
+                    numberAhead = parseNestedAttributes(attributeList, line[i+1:])
+                    i += numberAhead + 1
+                    print("------ END -------")
+                    attributeFound = False
+                elif line[i] == '}': #Special case: At end of line (grab Attribute 'name' and 'value')
                     currentAttribute.append(attributeValue)
                     attributeList.append(currentAttribute)
-                elif thisChar != ',':
-                    attributeValue += thisChar
+                    print(currentAttribute)
+                elif line[i] != ',':
+                    attributeValue += line[i]
                 else:
                     currentAttribute.append(attributeValue)
                     attributeValue = ""
                     attributeList.append(currentAttribute)
+                    print(currentAttribute)
                     currentAttribute = []
                     attributeFound = False
-                    next(thisChar_iter, None)
-
-
+                    i += 1
+            i += 1
+        print("")
         attributeMatrix.append(attributeList)
 
     return attributeMatrix
