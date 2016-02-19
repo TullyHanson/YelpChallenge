@@ -12,7 +12,9 @@ from .plot import *
 from . import transforms 
 
 # import classifiers into sub-namespaces
-from . import knn 
+from . import knn
+
+from . import linear
 
 
 

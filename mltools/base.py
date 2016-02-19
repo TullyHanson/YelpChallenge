@@ -14,16 +14,16 @@ from .utils import toIndex
 
 class classifier:
 
-  def __init__(self, X=None, Y=None, *args, **kwargs):
+  def __init__(self, *args, **kwargs):
     """
     Constructor for base class for several different classifiers. 
     This class implements methods that generalize to different classifiers.
     Optional arguments X,Y,... call train(X,Y,...) to initialize the model
     """
     self.classes = []
-    # TODO: if Y!=None init classes from data
-    if X is not None and Y is not None:
-        return self.train(X,Y,*args, **kwargs)
+    # TODO: if Y!=None init classes from data? (leave to train?)
+    if len(args) or len(kwargs):
+        return self.train(*args, **kwargs)
 
 
   def __call__(self, *args, **kwargs):
@@ -49,7 +49,9 @@ class classifier:
       Y :  Mx1 vector of predicted class for each data point
     The default implementation uses predictSoft and converts to the most likely class.
     """
-    return np.argmax( self.predictSoft(X) , axis=1 )
+    #return np.argmax( self.predictSoft(X) , axis=1 )
+    idx = np.argmax( self.predictSoft(X) , axis=1 )       # find most likely class (index)
+    return np.asarray([[self.classes[i]] for i in idx])   # convert to saved class values
 
 
   def predictSoft(self,X):
@@ -230,8 +232,7 @@ class regressor:
     Constructor for base class for several different regression learners. 
     This class implements methods that generalize to different regressors.
     """
-    #pass
-    if len(args)>0 or len(kwargs)>0:
+    if len(args) or len(kwargs):
         return self.train(*args, **kwargs)
 
 
@@ -257,7 +258,8 @@ class regressor:
       X = M x N numpy array that contains M data points with N features
       Y = M x 1 numpy array of target values for each data point
     """
-    return np.mean(np.sum(np.absolute(Y - mat(self.predict(X))), axis=0))
+    Yhat = self.predict(X)
+    return np.mean(np.absolute(Y - Yhat.reshape(Y.shape)), axis=0)
 
 
   def mse(self, X, Y):
@@ -270,7 +272,9 @@ class regressor:
       X = M x N numpy array that contains M data points with N features
       Y = M x 1 numpy array of target values for each data point
     """
-    return np.mean(np.sum( (Y - mat(self.predict(X)))**2 , axis=0))
+    Yhat = self.predict(X)
+    #print Y.shape, Yhat.shape
+    return np.mean( (Y - Yhat.reshape(Y.shape))**2 , axis=0)
 
 
   def rmse(self, X, Y):
