@@ -1,7 +1,9 @@
 import matplotlib.pyplot as plt
 import os
 import re
-
+import time
+import mltools as ml
+import numpy as np
 
 #Take a subset of businesses that meet category == restaurant
 def findRestaurants(businessFile):
@@ -143,7 +145,7 @@ def determineUnique(attributeMatrix, restaurantArray):
     return unique
 
 
-def createTargetArray(restaurantArray):
+def createTargetList(restaurantArray):
     targetArray = []
     for line in restaurantArray:
         # Finds the match for the text "stars" in the given line
@@ -180,7 +182,7 @@ def determineDecencyAttributes(numberOfAttributes, starTargetArray):
             if currentNum == i:
                 if starTargetArray[index] >= 4.0:
                     good += 1
-                elif starTargetArray[index] <= 2.0:
+                elif starTargetArray[index] < 3.0:
                     bad += 1
         attributeNumGood.append(good)
         attributeNumBad.append(bad)
@@ -188,11 +190,12 @@ def determineDecencyAttributes(numberOfAttributes, starTargetArray):
     return attributeNumGood, attributeNumBad
 
 
+
 def plotTesting(numberOfAttributes, starTargetArray):
     attributeNumGood, attributeNumBad = determineDecencyAttributes(numberOfAttributes, starTargetArray)
 
     attributeX = []
-    for i in range (0, 63):
+    for i in range(0, 63):
         attributeX.append(i)
 
     percentGood = []
@@ -206,6 +209,40 @@ def plotTesting(numberOfAttributes, starTargetArray):
     plt.scatter(attributeX, percentGood)
     plt.show()
 
+def createBinaryAttributeList(attributeMatrix, uniqueAttributes):
+
+    # Create a dictionary for index lookup while passing over attributes
+    dict = {}
+    for i, unique in enumerate(uniqueAttributes):
+        dict[unique] = i
+
+    binaryAttributeList = []
+    for restaurant in attributeMatrix:
+        currentAttributeList = [0] * 63
+
+        for attribute in restaurant:
+            if(attribute[1] == "true"):
+                currentAttributeList[dict[attribute[0]]] = 1
+            elif(attribute[1] == "false"):
+                pass
+            else:
+                currentAttributeList[dict[attribute[0]]] = 1
+                #print(attribute[1])
+
+        binaryAttributeList.append(currentAttributeList)
+    return binaryAttributeList
+
+def createBinaryTargetList(starTargetList):
+
+    binaryTargetList = []
+    for thisStar in starTargetList:
+        if(thisStar >= 4.0):
+            binaryTargetList.append(1)
+        else:
+            binaryTargetList.append(0)
+
+    return binaryTargetList
+
 
 if __name__ == '__main__':
 
@@ -218,8 +255,45 @@ if __name__ == '__main__':
 
     uniqueAttributes = determineUnique(attributeMatrix, restaurantArray)
 
-    numberOfAttributes = determineNumAttributes(attributeMatrix)
-    starTargetArray = createTargetArray(restaurantArray)
+    starTargetList = createTargetList(restaurantArray)
 
+    binaryAttributeList = createBinaryAttributeList(attributeMatrix, uniqueAttributes)
+    binaryTargetList = createBinaryTargetList(starTargetList)
+
+    binaryAttributeList = np.array(binaryAttributeList)
+    binaryTargetList = np.array(binaryTargetList)
+
+    #Where we begin to learn on the data
+    Xtrain,Xtest,Ytrain,Ytest = ml.splitData(binaryAttributeList,binaryTargetList, 0.75)
+
+    errTrain = [0, 0, 0, 0, 0, 0, 0]
+    errTest = [0, 0, 0, 0, 0, 0, 0]
+    learner = ml.knn.knnClassify()
+
+    K = [1, 2, 5, 10, 50, 100, 200]
+    for i,k in enumerate(K):
+        learner.train(Xtrain, Ytrain, k)
+
+        Yhat = learner.predict(Xtrain)
+        for index in range(0, len(Yhat)):
+            if Yhat[index] != Ytrain[index]:
+                errTrain[i] += 1
+
+        Yhattest = learner.predict(Xtest)
+        for index in range(0, len(Yhattest)):
+            if Yhattest[index] != Ytest[index]:
+                errTest[i] += 1
+
+    for i in range(0, 7):
+        errTrain[i] = errTrain[i] / len(Yhat)
+        errTest[i] = errTest[i] / len(Yhattest)
+
+    print(errTrain)
+    print(errTest)
+
+    plt.semilogx(K, errTrain, color = 'red')
+    plt.semilogx(K, errTest, color = 'green')
+    plt.show()
+    #numberOfAttributes = determineNumAttributes(attributeMatrix)
     #plotTesting(numberOfAttributes, starTargetArray)
 
