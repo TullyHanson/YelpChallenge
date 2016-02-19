@@ -2,6 +2,8 @@ import matplotlib.pyplot as plt
 import os
 import re
 import time
+import mltools as ml
+import numpy as np
 
 #Take a subset of businesses that meet category == restaurant
 def findRestaurants(businessFile):
@@ -258,7 +260,40 @@ if __name__ == '__main__':
     binaryAttributeList = createBinaryAttributeList(attributeMatrix, uniqueAttributes)
     binaryTargetList = createBinaryTargetList(starTargetList)
 
+    binaryAttributeList = np.array(binaryAttributeList)
+    binaryTargetList = np.array(binaryTargetList)
 
+    #Where we begin to learn on the data
+    Xtrain,Xtest,Ytrain,Ytest = ml.splitData(binaryAttributeList,binaryTargetList, 0.75)
+
+    errTrain = [0, 0, 0, 0, 0, 0, 0]
+    errTest = [0, 0, 0, 0, 0, 0, 0]
+    learner = ml.knn.knnClassify()
+
+    K = [1, 2, 5, 10, 50, 100, 200]
+    for i,k in enumerate(K):
+        learner.train(Xtrain, Ytrain, k)
+
+        Yhat = learner.predict(Xtrain)
+        for index in range(0, len(Yhat)):
+            if Yhat[index] != Ytrain[index]:
+                errTrain[i] += 1
+
+        Yhattest = learner.predict(Xtest)
+        for index in range(0, len(Yhattest)):
+            if Yhattest[index] != Ytest[index]:
+                errTest[i] += 1
+
+    for i in range(0, 7):
+        errTrain[i] = errTrain[i] / len(Yhat)
+        errTest[i] = errTest[i] / len(Yhattest)
+
+    print(errTrain)
+    print(errTest)
+
+    plt.semilogx(K, errTrain, color = 'red')
+    plt.semilogx(K, errTest, color = 'green')
+    plt.show()
     #numberOfAttributes = determineNumAttributes(attributeMatrix)
     #plotTesting(numberOfAttributes, starTargetArray)
 
