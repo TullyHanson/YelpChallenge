@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import os
 import re
-
+import time
 
 #Take a subset of businesses that meet category == restaurant
 def findRestaurants(businessFile):
@@ -143,7 +143,7 @@ def determineUnique(attributeMatrix, restaurantArray):
     return unique
 
 
-def createTargetArray(restaurantArray):
+def createTargetList(restaurantArray):
     targetArray = []
     for line in restaurantArray:
         # Finds the match for the text "stars" in the given line
@@ -180,7 +180,7 @@ def determineDecencyAttributes(numberOfAttributes, starTargetArray):
             if currentNum == i:
                 if starTargetArray[index] >= 4.0:
                     good += 1
-                elif starTargetArray[index] <= 2.0:
+                elif starTargetArray[index] < 3.0:
                     bad += 1
         attributeNumGood.append(good)
         attributeNumBad.append(bad)
@@ -188,11 +188,12 @@ def determineDecencyAttributes(numberOfAttributes, starTargetArray):
     return attributeNumGood, attributeNumBad
 
 
+
 def plotTesting(numberOfAttributes, starTargetArray):
     attributeNumGood, attributeNumBad = determineDecencyAttributes(numberOfAttributes, starTargetArray)
 
     attributeX = []
-    for i in range (0, 63):
+    for i in range(0, 63):
         attributeX.append(i)
 
     percentGood = []
@@ -206,6 +207,40 @@ def plotTesting(numberOfAttributes, starTargetArray):
     plt.scatter(attributeX, percentGood)
     plt.show()
 
+def createBinaryAttributeList(attributeMatrix, uniqueAttributes):
+
+    # Create a dictionary for index lookup while passing over attributes
+    dict = {}
+    for i, unique in enumerate(uniqueAttributes):
+        dict[unique] = i
+
+    binaryAttributeList = []
+    for restaurant in attributeMatrix:
+        currentAttributeList = [0] * 63
+
+        for attribute in restaurant:
+            if(attribute[1] == "true"):
+                currentAttributeList[dict[attribute[0]]] = 1
+            elif(attribute[1] == "false"):
+                pass
+            else:
+                currentAttributeList[dict[attribute[0]]] = 1
+                #print(attribute[1])
+
+        binaryAttributeList.append(currentAttributeList)
+    return binaryAttributeList
+
+def createBinaryTargetList(starTargetList):
+
+    binaryTargetList = []
+    for thisStar in starTargetList:
+        if(thisStar >= 4.0):
+            binaryTargetList.append(1)
+        else:
+            binaryTargetList.append(0)
+
+    return binaryTargetList
+
 
 if __name__ == '__main__':
 
@@ -218,8 +253,12 @@ if __name__ == '__main__':
 
     uniqueAttributes = determineUnique(attributeMatrix, restaurantArray)
 
-    numberOfAttributes = determineNumAttributes(attributeMatrix)
-    starTargetArray = createTargetArray(restaurantArray)
+    starTargetList = createTargetList(restaurantArray)
 
+    binaryAttributeList = createBinaryAttributeList(attributeMatrix, uniqueAttributes)
+    binaryTargetList = createBinaryTargetList(starTargetList)
+
+
+    #numberOfAttributes = determineNumAttributes(attributeMatrix)
     #plotTesting(numberOfAttributes, starTargetArray)
 
