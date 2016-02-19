@@ -9,7 +9,7 @@ Using logistic regression, I hope to create a learner that can predict whether a
 - ~~Parse for individual attributes in each line~~
 - ~~Using above attribute list, create a list of all unique attributes~~
 - ~~Create a Restaurant by Attribute feature matrix that describes, for each restaurant, which attributes it contains~~
-- Create a binary attribute list for each restaurant to be used with a learner
-- Create a binary target list for each restaurant to be used with a learner
+- ~~Create a binary attribute list for each restaurant to be used with a learner~~
+- ~~Create a binary target list for each restaurant to be used with a learner~~
 - Partition feature vector/target vector into training and test data
 - Evaluate accuracy of learner and adjust as necessary
