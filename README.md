@@ -7,6 +7,7 @@ Using logistic regression, I hope to create a learner that can predict whether a
 
 
 The following is a graph showing the correlation between the number of attributes a restaurant contains, and it's likelihood of success:
+
 ![alt tag](https://github.com/TullyHanson/YelpChallenge/blob/master/CorrelationFigure.png)
 
 # To Do:
@@ -15,5 +16,5 @@ The following is a graph showing the correlation between the number of attribute
 - ~~Create a Restaurant by Attribute feature matrix that describes, for each restaurant, which attributes it contains~~
 - ~~Create a binary attribute list for each restaurant to be used with a learner~~
 - ~~Create a binary target list for each restaurant to be used with a learner~~
-- Partition feature vector/target vector into training and test data
+- ~~Partition feature vector/target vector into training and test data~~
 - Evaluate accuracy of learner and adjust as necessary
