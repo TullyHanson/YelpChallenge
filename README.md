@@ -6,9 +6,11 @@ The goal for this project is to determine whether the success of a restaurant ca
 Using logistic regression, I hope to create a learner that can predict whether a restaurant will fall into one of two categories: Succesful (4 or 5 stars) or Unsuccesful (1 or 2 stars), using only the attributes listed on its Yelp portfolio. 
 
 
-The following is a graph showing the correlation between the number of attributes a restaurant contains, and it's likelihood of success:
+The following is a graph showing the correlation between the number of attributes a restaurant contains, and its likelihood of success:
+
 
 ![alt tag](https://github.com/TullyHanson/YelpChallenge/blob/master/CorrelationFigure.png)
+
 
 # To Do:
 - ~~Parse for individual attributes in each line~~
@@ -18,3 +20,4 @@ The following is a graph showing the correlation between the number of attribute
 - ~~Create a binary target list for each restaurant to be used with a learner~~
 - ~~Partition feature vector/target vector into training and test data~~
 - Evaluate accuracy of learner and adjust as necessary
+- Implement gradient descent to increase accuracy of learner
