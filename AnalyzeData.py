@@ -7,35 +7,50 @@ import numpy as np
 
 #Take a subset of businesses that meet category == restaurant
 def findRestaurants(businessFile):
-    restaurantArray = []
-    #Read in the first line
+    restaurantList = []
+
     currentLine = businessFile.readline()
     while currentLine:
         currentLine = currentLine.strip("\n")
-
+        # If this current line corresponds to a restaurant, add it to our list
         if "Restaurants" in currentLine:
-            restaurantArray.append(currentLine)
-
+            restaurantList.append(currentLine)
         currentLine = businessFile.readline()
+
     businessFile.close()
-    return restaurantArray
+    return restaurantList
 
 
-def findDirtyAttributeList(restaurantArray):
-    dirtyAttributeArray = []
-    for line in restaurantArray:
+# Find the subset of each restaurant's data that contains the attributes
+def findDirtyAttributeList(restaurantList):
+    dirtyAttributeList = []
+    for line in restaurantList:
         # Finds the match for the text "attributes" in the given line
         matchText = re.search(r"[^a-zA-Z](attributes)[^a-zA-Z]", line)
         stringStartPos = matchText.start(1)
 
         #Sanity check to make sure we're getting the text containing all the attributes
         #print(line[stringStartPos+14:-21].replace("\"", ""))
+
         # Add the list of attributes to the array
-        dirtyAttributeArray.append(line[stringStartPos+14:-21].replace("\"", ""))
+        dirtyAttributeList.append(line[stringStartPos+14:-21].replace("\"", ""))
 
-    return dirtyAttributeArray
+    return dirtyAttributeList
 
 
+# Function that parses the nested portion of an attribute list. Functions similarly
+# to the standard parseAttributes function, but has different stop conditions to account
+# for its nested nature.
+#
+# At the end, it returns the total number of characters that we iterated through
+# in this function. This is to allow the other parseAttributes function
+# to take off where we ended.
+#
+# *** NOTE
+# This function ignores the general attributes. For example, given the nested attribute:
+#       Ambience: {Romantic: true, Casual: false, Fine Dining: true}
+# This function would ignore "Ambience" and instead parse it into the 3 attributes:
+#       ['Romantic', 'true'], ['Casual', 'False'], ['Fine Dining', 'true']
 def parseNestedAttributes(attributeList, currentLine):
     attributeFound = False
     finishedNested = False
@@ -44,45 +59,43 @@ def parseNestedAttributes(attributeList, currentLine):
     attributeValue = ""
     currentAttribute = []
 
-    i = 0
-    if currentLine[i] == '}':
+    if currentLine[0] == '}':
         return 2
 
+    relativeIndex = 0
     while not finishedNested:
         if not attributeFound:
-            if currentLine[i] != ':':
-                attributeName += currentLine[i]
+            if currentLine[relativeIndex] != ':':
+                attributeName += currentLine[relativeIndex]
             else:
                 attributeFound = True
                 currentAttribute.append(attributeName)
                 attributeName = ""
-                i += 1
+                relativeIndex += 1
         else:
-            if currentLine[i] == '}':
+            if currentLine[relativeIndex] == '}':
                 finishedNested = True
                 currentAttribute.append(attributeValue)
                 attributeList.append(currentAttribute)
-                i += 1
-            elif currentLine[i] != ',':
-                attributeValue += currentLine[i]
+                relativeIndex += 1
+            elif currentLine[relativeIndex] != ',':
+                attributeValue += currentLine[relativeIndex]
             else:
                 currentAttribute.append(attributeValue)
                 attributeValue = ""
                 attributeList.append(currentAttribute)
                 currentAttribute = []
                 attributeFound = False
-                i += 1
-        i += 1
+                relativeIndex += 1
+        relativeIndex += 1
 
-    return i
+    return relativeIndex
 
 
 # This is where we want to parse the attribute list for the separate attributes.
 # Slightly more complicated because attributes can either be:
-# "<attribute>": <bool>,      or  "<attribute>": {"<subattribute>": <bool>, ...}
-# It may be easier to run through all the attributes once, only grabbing those enclosed in " ",
-# and add it to a hashset so we can find all unique attributes.
-# Then, run through again and for each line find which of those unique attributes it contains...
+# "<attribute>": <value>,      or    "<attribute>": {"<subattribute>": <value>, ...}
+# For the latter, we instead call parseNestedAttributes above.
 def parseForAttributes(dirtyAttributeArray):
     attributeMatrix = []
 
@@ -135,46 +148,52 @@ def parseForAttributes(dirtyAttributeArray):
     return attributeMatrix
 
 
+# Determines the unique Attribute Names that exist within the Yelp Dataset
+# Examples include [Good For, Valet, Take Out, etc]
 def determineUnique(attributeMatrix, restaurantArray):
     unique = set()
     for i, restaurant in enumerate(attributeMatrix):
         for attributes in restaurant:
             if not unique.__contains__(attributes[0]):
                 unique.add(attributes[0])
-
     return unique
 
 
+# Searches a restaurant's data to determine its current star count.
+# Adds this to a list that we use as our metric to determine the success of the restaurant
 def createTargetList(restaurantArray):
     targetArray = []
     for line in restaurantArray:
-        # Finds the match for the text "stars" in the given line
+        # Finds the match for the text "stars": in the given line
         matchText = re.search(r"[^a-zA-Z](\"stars\":)[^a-zA-Z]", line)
         stringStartPos = matchText.start(1)
 
+        # Sanity check to make sure that we are grabbing the correct part of the string
+        #print(line[stringStartPos+9 : stringStartPos + 12])
+
+        # Grabs only the rating, and stores it as a float (2.5, 4.0, 1.5, etc)
         starRating = line[stringStartPos+9 : stringStartPos + 12]
         floatRating = float(starRating)
-
-        # Using the above start position, increments slightly forward past the text and only grabs the star rating
         targetArray.append(floatRating)
 
-        # Sanity check to make sure that we are grabbing the correct part of the string
-        #print(line[matchText.start(1)+8 : matchText.start(1) + 11])
     return targetArray
 
+
+# Determines how many attributes each restaurant contains.
+# This data is used to determine if there is a correlation
+# between number of attributes and restaurant success
 def determineNumAttributes(attributeMatrix):
     numberOfAttributes = []
-
     for restaurant in attributeMatrix:
         numberOfAttributes.append(float(len(restaurant)))
-
     return numberOfAttributes
 
-def determineDecencyAttributes(numberOfAttributes, starTargetArray):
 
+# Determines how many "Good" and "Bad" restaurants there
+# are for each given number of attributes.
+def determineNumGoodBad(numberOfAttributes, starTargetArray):
     attributeNumGood = []
     attributeNumBad = []
-
     for i in range(0, 63):
         good = 0
         bad = 0
@@ -191,26 +210,64 @@ def determineDecencyAttributes(numberOfAttributes, starTargetArray):
 
 
 
-def plotTesting(numberOfAttributes, starTargetArray):
-    attributeNumGood, attributeNumBad = determineDecencyAttributes(numberOfAttributes, starTargetArray)
+# Plots the % of restaurants that are succesful with respect to number of attributes.
+# Used to determine if there is a correlation between the two
+def plotTesting(numberOfAttributes, starTargetArray, uniqueAttributes):
 
+    numGoodRestaurants, numBadRestaurants = determineNumGoodBad(numberOfAttributes, starTargetArray)
+
+    # Creates a list with values ranging from 0 to #UniqueAttributes
+    # Used as the x values when plotting
     attributeX = []
-    for i in range(0, 63):
-        attributeX.append(i)
+    for i in range(0, len(uniqueAttributes)):
+        attributeX.append(float(i))
 
+    # Calculates the percentage of "Good" restaurants at each attribute count
     percentGood = []
-    for i in range(0, 63):
-        denominator = (attributeNumGood[i] + attributeNumBad[i])
+    for i in range(0, len(uniqueAttributes)):
+        denominator = (numGoodRestaurants[i] + numBadRestaurants[i])
         if denominator == 0:
-            percentGood.append(0)
+            percentGood.append(float(0))
         else:
-            percentGood.append(float(float(attributeNumGood[i]) / float(denominator)))
+            percentGood.append(float(float(numGoodRestaurants[i]) / float(denominator)))
 
-    plt.scatter(attributeX, percentGood)
+    # Take a subset of our attribute data to avoid the inaccurate 0's at high attribute count
+    # Turn them into np arrays for use with our learner
+    xStandard = np.array(attributeX[:52])
+    xStandard = xStandard[:,np.newaxis]    # By default xStandard is a (52,) list, this forces it to be (52, 1)
+    yPercentGood = np.array(percentGood[:52])
+
+    # Creates polynomial features of degree 2, allows our learner to find a more accurate best-fit line
+    xPolynomial = ml.transforms.fpoly(xStandard, 2, bias=False)
+    # Rescales our data so they have similar ranges and variance
+    xPolynomial,params = ml.transforms.rescale(xPolynomial)
+    # Train our learner on the polynomial features
+    lr = ml.linear.linearRegress(xPolynomial, yPercentGood)
+
+    # Creates a sample of possible x values to use with our prediction
+    possibleXValues = np.linspace(0, 52, 200)
+    possibleXValues = possibleXValues[:,np.newaxis]     # Forces xs to be (200,1)
+    # Creates polynomial x values of degree 2
+    possiblePolyXValues = ml.transforms.fpoly(possibleXValues, 2, False)
+    # Rescale the x values so they have similar ranges and variance
+    possiblePolyXValues,_ = ml.transforms.rescale(possiblePolyXValues)
+
+    # Using our learner, predict for all possiblePolyXValues. This calculates our best-fit line
+    ysP = lr.predict(possiblePolyXValues)
+
+    plt.suptitle("Percent \"Good\" given Number of Attributes")
+    plt.xlabel("Number of Attributes")
+    plt.ylabel("% \"Good\" Restaurants")
+    # Scatter plot of our original data
+    plt.scatter(xStandard, yPercentGood)
+    # Plots our best-fit line
+    plt.plot(possibleXValues, ysP, 'g')
+    plt.legend(["Prediction", "Actual Data"], loc=4)
+    plt.xlim([0, 55])
     plt.show()
 
-def createBinaryAttributeList(attributeMatrix, uniqueAttributes):
 
+def createBinaryAttributeList(attributeMatrix, uniqueAttributes):
     # Create a dictionary for index lookup while passing over attributes
     dict = {}
     for i, unique in enumerate(uniqueAttributes):
@@ -221,19 +278,19 @@ def createBinaryAttributeList(attributeMatrix, uniqueAttributes):
         currentAttributeList = [0] * 63
 
         for attribute in restaurant:
-            if(attribute[1] == "true"):
+            if attribute[1] == "true":
                 currentAttributeList[dict[attribute[0]]] = 1
-            elif(attribute[1] == "false"):
+            elif attribute[1] == "false":
                 pass
             else:
                 currentAttributeList[dict[attribute[0]]] = 1
-                #print(attribute[1])
 
         binaryAttributeList.append(currentAttributeList)
+
     return binaryAttributeList
 
-def createBinaryTargetList(starTargetList):
 
+def createBinaryTargetList(starTargetList):
     binaryTargetList = []
     for thisStar in starTargetList:
         if(thisStar >= 4.0):
@@ -244,27 +301,25 @@ def createBinaryTargetList(starTargetList):
     return binaryTargetList
 
 
-if __name__ == '__main__':
 
+if __name__ == '__main__':
     #Load in business file
     businessFile = open(os.getcwd() + "/yelp_academic_dataset_business.json", "r")
-    restaurantArray = findRestaurants(businessFile)
+    #Find the subset of businesses that are restaurants
+    restaurantList = findRestaurants(businessFile)
 
-    dirtyAttributeArray = findDirtyAttributeList(restaurantArray)
-    attributeMatrix = parseForAttributes(dirtyAttributeArray)
-
-    uniqueAttributes = determineUnique(attributeMatrix, restaurantArray)
-
-    starTargetList = createTargetList(restaurantArray)
-
-    binaryAttributeList = createBinaryAttributeList(attributeMatrix, uniqueAttributes)
-    binaryTargetList = createBinaryTargetList(starTargetList)
-
-    binaryAttributeList = np.array(binaryAttributeList)
-    binaryTargetList = np.array(binaryTargetList)
+    # Find the subset of each restaurant's data that contains the attributes
+    dirtyAttributeList = findDirtyAttributeList(restaurantList)
+    # Further parse the dirtyAttributeArray for specific attributes to create our matrix
+    attributeMatrix = parseForAttributes(dirtyAttributeList)
 
 
+    uniqueAttributes = determineUnique(attributeMatrix, restaurantList)
+    binaryAttributeList = np.array(createBinaryAttributeList(attributeMatrix, uniqueAttributes))
+
+    starTargetList = createTargetList(restaurantList)
+    binaryTargetList = np.array(createBinaryTargetList(starTargetList))
 
     numberOfAttributes = determineNumAttributes(attributeMatrix)
-    plotTesting(numberOfAttributes, starTargetList)
+    plotTesting(numberOfAttributes, starTargetList, uniqueAttributes)
 
