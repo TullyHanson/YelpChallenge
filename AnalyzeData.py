@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 import os
 import re
-import time
 import mltools as ml
 import numpy as np
 
@@ -152,6 +151,7 @@ def parseForAttributes(dirtyAttributeArray):
 # Examples include [Good For, Valet, Take Out, etc]
 def determineUnique(attributeMatrix, restaurantArray):
     unique = set()
+
     for i, restaurant in enumerate(attributeMatrix):
         for attributes in restaurant:
             if not unique.__contains__(attributes[0]):
@@ -229,7 +229,7 @@ def plotTesting(numberOfAttributes, starTargetArray, uniqueAttributes):
         if denominator == 0:
             percentGood.append(float(0))
         else:
-            percentGood.append(float(float(numGoodRestaurants[i]) / float(denominator)))
+            percentGood.append(float(float(numGoodRestaurants[i]) / float(denominator)) * 100.0)
 
     # Take a subset of our attribute data to avoid the inaccurate 0's at high attribute count
     # Turn them into np arrays for use with our learner
@@ -255,9 +255,9 @@ def plotTesting(numberOfAttributes, starTargetArray, uniqueAttributes):
     # Using our learner, predict for all possiblePolyXValues. This calculates our best-fit line
     ysP = lr.predict(possiblePolyXValues)
 
-    plt.suptitle("Percent \"Good\" given Number of Attributes")
+    plt.suptitle("Percent \"Good\" Restaurants given Number of Attributes")
     plt.xlabel("Number of Attributes")
-    plt.ylabel("% \"Good\" Restaurants")
+    plt.ylabel("Percent \"Good\" Restaurants")
     # Scatter plot of our original data
     plt.scatter(xStandard, yPercentGood)
     # Plots our best-fit line
@@ -278,12 +278,92 @@ def createBinaryAttributeList(attributeMatrix, uniqueAttributes):
         currentAttributeList = [0] * 63
 
         for attribute in restaurant:
+            #if attribute[0] == "Price Range":
+            #    currentAttributeList[dict[attribute[0]]] = int(attribute[1])
+            #elif attribute[1] == "true":
+            #    currentAttributeList[dict[attribute[0]]] = 1
+            #else:
+            #    currentAttributeList[dict[attribute[0]]] = 1
             if attribute[1] == "true":
                 currentAttributeList[dict[attribute[0]]] = 1
             elif attribute[1] == "false":
-                pass
+                currentAttributeList[dict[attribute[0]]] = 0
             else:
-                currentAttributeList[dict[attribute[0]]] = 1
+                currentAttributeList[dict[attribute[0]]] = computeSpecialValue(attribute)
+
+        binaryAttributeList.append(currentAttributeList)
+
+    return binaryAttributeList
+
+
+def computeSpecialValue(attribute):
+
+    name = attribute[0]
+    val = attribute[1]
+
+    if name == "Noise Level":
+        if val == "average":
+            return 1
+        if val == "loud":
+            return -1
+        if val == "quiet":
+            return 2
+        if val == "very_loud":
+            return -2
+
+    elif name == "Attire":
+        if val == "casual":
+            return 1
+        if val == "dressy":
+            return 2
+        if val == "formal":
+            return 3
+
+    elif name == "Alcohol":
+        if val == "none":
+            return -1
+        if val == "full_bar":
+            return 2
+        if val == "beer_and_wine":
+            return 1
+
+    elif name == "Price Range":
+        return int(val)
+
+    elif name == "Wi-Fi":
+        if val == "free":
+            return 1
+        if val == "paid":
+            return -2
+        if val == "no":
+            return -1
+
+    else:
+        return 0
+
+
+def createSpecificBinaryAttributeList(attributeMatrix):
+    # Create a dictionary for index lookup while passing over attributes
+    dict = {}
+    specificAttributes = {"Take-out", "Noise Level", "Takes Reservations", "street", "lot", "valet", "Has TV", "Outdoor Seating",
+                          "Attire", "Alcohol", "Good for Kids", "Good For Groups", "Price Range", "Happy Hour", "Wi-Fi"}
+
+    for i, unique in enumerate(specificAttributes):
+        dict[unique] = i
+
+    binaryAttributeList = []
+    for restaurant in attributeMatrix:
+        currentAttributeList = [0] * 15
+
+        for attribute in restaurant:
+            if dict.__contains__(attribute[0]):
+                #currentAttributeList[dict[attribute[0]]] = int(attribute[1])
+                if attribute[1] == "true":
+                    currentAttributeList[dict[attribute[0]]] = 1
+                elif attribute[1] == "false":
+                    currentAttributeList[dict[attribute[0]]] = 0
+                else:
+                    currentAttributeList[dict[attribute[0]]] = computeSpecialValue(attribute)
 
         binaryAttributeList.append(currentAttributeList)
 
@@ -301,6 +381,99 @@ def createBinaryTargetList(starTargetList):
     return binaryTargetList
 
 
+def gradientDescent(x, y, theta, alpha, m, numIterations):
+    y = y[:,np.newaxis]
+
+    for i in range(0, numIterations):
+        hypothesis = np.dot(theta, x.T)
+        loss = y.T - hypothesis
+
+        for j, value in enumerate(loss.T):
+            if value > 5.0:
+                print("Greater: " + str(value))
+                print(str(hypothesis.T[j]) + "    " + str(y[j]))
+
+        # avg cost per example (the 2 in 2*m doesn't really matter here.
+        # But to be consistent with the gradient, I include it)
+        cost = np.sum(loss) / (m)
+
+        # avg gradient per example
+        gradient = np.dot(loss, x)
+        #gradient = gradient * -2
+        gradient = gradient / m
+
+        # update
+        theta = theta + alpha * gradient
+
+    return theta
+
+
+def predictLinearRegress(binaryAttributeList, starTargetList):
+
+    starTargetList = np.array(starTargetList)
+    Xtrain, Xtest, Ytrain, Ytest = ml.splitData(binaryAttributeList, starTargetList, 0.75)
+
+    lr = ml.linear.linearRegress(Xtrain, Ytrain)
+
+    yHatInitial = lr.predict(Xtest)
+
+    correct = 0
+    total = 0
+    for i, value in enumerate(yHatInitial):
+        if value >= 4.0 and Ytest[i] >= 4.0:
+            correct += 1
+        elif value < 4.0 and Ytest[i] < 4.0:
+            correct += 1
+
+        total += 1
+
+    ratioCorrect = float(float(correct) / float(total))
+    print("Ratio correct: " + str(ratioCorrect))
+
+
+
+    onesCol = np.ones((len(Xtrain),1))
+    Xtrain = np.concatenate((onesCol, Xtrain), 1)
+
+    m, n = np.shape(Xtrain)
+    print(str(m) + " " + str(n))
+
+    #Use the calculated theta values to repeatedly do gradient descent
+    newThetas = gradientDescent(Xtrain, Ytrain, lr.theta, 0.1, m, 2000)
+
+
+    lr.theta = newThetas
+    yHat = lr.predict(Xtest)
+
+
+    correct = 0
+    total = 0
+    for i, value in enumerate(yHat):
+        if value >= 4.0 and Ytest[i] >= 4.0:
+            correct += 1
+        elif value < 4.0 and Ytest[i] < 4.0:
+            correct += 1
+        total += 1
+
+    ratioCorrect = float(float(correct) / float(total))
+    print("Ratio correct: " + str(ratioCorrect))
+
+
+
+def plotStarRatingBarGraph(starTargetList):
+    numStarCount = [0] * 9
+    starRating = [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0]
+    for rating in starTargetList:
+        numStarCount[int(2*rating) - 2] += 1
+
+    width = 1 / 3.0
+    plt.suptitle("Distribution of Star Ratings")
+    plt.xlabel("Star Rating")
+    plt.ylabel("Number of Restaurants")
+    plt.bar(starRating, numStarCount, width, color="blue")
+    plt.show()
+
+
 
 if __name__ == '__main__':
     #Load in business file
@@ -316,10 +489,53 @@ if __name__ == '__main__':
 
     uniqueAttributes = determineUnique(attributeMatrix, restaurantList)
     binaryAttributeList = np.array(createBinaryAttributeList(attributeMatrix, uniqueAttributes))
+    #binaryAttributeList = np.array(createSpecificBinaryAttributeList(attributeMatrix))
+
 
     starTargetList = createTargetList(restaurantList)
     binaryTargetList = np.array(createBinaryTargetList(starTargetList))
 
-    numberOfAttributes = determineNumAttributes(attributeMatrix)
-    plotTesting(numberOfAttributes, starTargetList, uniqueAttributes)
+    plotStarRatingBarGraph(starTargetList)
 
+    #numberOfAttributes = determineNumAttributes(attributeMatrix)
+    #plotTesting(numberOfAttributes, starTargetList, uniqueAttributes)
+
+    #predictLinearRegress(binaryAttributeList, starTargetList)
+
+    """
+    Bayes
+    -----
+
+    Xtrain, Xtest, Ytrain, Ytest = ml.splitData(binaryAttributeList, starTargetList)
+
+    bayes = ml.bayes.gaussClassify()
+    bayes.train(Xtrain, Ytrain, True)
+    YtestHat = bayes.predictSoft(Xtest)
+
+    print(YtestHat.shape)
+    """
+
+
+
+    """
+    KNN
+    ----
+
+
+    K = [1]#, 20, 50, 100, 500, 1000, 1500, 2000]
+
+    for i in range(0, 1):
+        knn = ml.knn.knnClassify()
+        knn.train(Xtrain, Ytrain, K[i])
+        YtestHat = knn.predict(Xtrain)
+
+        total = 0
+        numCorrect = 0
+        for i, value in enumerate(Ytest):
+            #print(str(Ytest[i]) + " == " + str(YtestHat[i]))
+            if abs(Ytest[i] - YtestHat[i]) <= 0.5:
+                numCorrect += 1
+            total += 1
+
+        print("   -->   Total correct: " + str(float(numCorrect / total)))
+"""

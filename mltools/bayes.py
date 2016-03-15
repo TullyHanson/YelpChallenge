@@ -96,7 +96,8 @@ class gaussClassify(classifier):
             X0 = X[indexes,:] - self.means[i]                   # center the data
             wX0 = X0 * wtsi[:,np.newaxis]                       # weighted, centered data
             if diagonal:            # brute-force weighted variance computation
-                self.covars[i] = np.diag(np.sum(tmp * wtmp, axis=0) + reg)
+                print("Here")
+                #self.covars[i] = np.diag(np.sum(tmp * wtmp, axis=0) + reg)
             else:                   # weighted, regularized covariance computation
                 self.covars[i] = X0.T.dot(wX0) + np.diag(reg + 0 * self.means[i])
 
@@ -120,6 +121,7 @@ class gaussClassify(classifier):
         p = np.zeros((m, C))
         for c in range(C):                        # compute probabilities for each class by Bayes rule
             # p(c) * p(x|c)
+            print(self.covars[c])
             p[:,c] = self.probs[c] * self.__eval_gaussian(X, self.means[c], self.covars[c])
         p /= np.sum(p, axis=1, keepdims=True)     # normalize each row (data point)
         return p
