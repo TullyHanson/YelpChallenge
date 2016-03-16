@@ -2,10 +2,16 @@ import matplotlib.pyplot as plt
 import os
 import re
 import mltools as ml
+import math
 import numpy as np
+from sklearn.metrics import mean_squared_error
+from sklearn.linear_model import SGDRegressor
+from sklearn.ensemble import RandomForestRegressor
+import xgboost
 
-#Take a subset of businesses that meet category == restaurant
-def findRestaurants(businessFile):
+
+#Take a subset of businesses that list "Restaurants" as their category
+def findRestaurantSubset(businessFile):
     restaurantList = []
 
     currentLine = businessFile.readline()
@@ -21,15 +27,13 @@ def findRestaurants(businessFile):
 
 
 # Find the subset of each restaurant's data that contains the attributes
+# The attributes found are returned as a string for each restaurant, are are not yet parsed
 def findDirtyAttributeList(restaurantList):
     dirtyAttributeList = []
     for line in restaurantList:
         # Finds the match for the text "attributes" in the given line
         matchText = re.search(r"[^a-zA-Z](attributes)[^a-zA-Z]", line)
         stringStartPos = matchText.start(1)
-
-        #Sanity check to make sure we're getting the text containing all the attributes
-        #print(line[stringStartPos+14:-21].replace("\"", ""))
 
         # Add the list of attributes to the array
         dirtyAttributeList.append(line[stringStartPos+14:-21].replace("\"", ""))
@@ -148,7 +152,7 @@ def parseForAttributes(dirtyAttributeArray):
 
 
 # Determines the unique Attribute Names that exist within the Yelp Dataset
-# Examples include [Good For, Valet, Take Out, etc]
+# Examples include [Good For, Valet, Take Out, etc.]
 def determineUnique(attributeMatrix, restaurantArray):
     unique = set()
 
@@ -159,7 +163,7 @@ def determineUnique(attributeMatrix, restaurantArray):
     return unique
 
 
-# Searches a restaurant's data to determine its current star count.
+# Parses a restaurant's data to determine its current star count.
 # Adds this to a list that we use as our metric to determine the success of the restaurant
 def createTargetList(restaurantArray):
     targetArray = []
@@ -167,9 +171,6 @@ def createTargetList(restaurantArray):
         # Finds the match for the text "stars": in the given line
         matchText = re.search(r"[^a-zA-Z](\"stars\":)[^a-zA-Z]", line)
         stringStartPos = matchText.start(1)
-
-        # Sanity check to make sure that we are grabbing the correct part of the string
-        #print(line[stringStartPos+9 : stringStartPos + 12])
 
         # Grabs only the rating, and stores it as a float (2.5, 4.0, 1.5, etc)
         starRating = line[stringStartPos+9 : stringStartPos + 12]
@@ -191,6 +192,8 @@ def determineNumAttributes(attributeMatrix):
 
 # Determines how many "Good" and "Bad" restaurants there
 # are for each given number of attributes.
+# "Good": 4.0 star ratings and up
+# "Bad": 3.0 star ratings and below
 def determineNumGoodBad(numberOfAttributes, starTargetArray):
     attributeNumGood = []
     attributeNumBad = []
@@ -209,8 +212,126 @@ def determineNumGoodBad(numberOfAttributes, starTargetArray):
     return attributeNumGood, attributeNumBad
 
 
+# Iterates over all features, and assigns an integer value for each attribute
+# True becomes 1, False becomes 0, and special attributes are given values
+# based on our discretion of their importance
+def assignAttributeValues(attributeMatrix, uniqueAttributes):
+    # Create a dictionary for index lookup while passing over attributes
+    dict = {}
+    for i, unique in enumerate(uniqueAttributes):
+        dict[unique] = i
+
+    attributeList = []
+    for restaurant in attributeMatrix:
+        currentAttributeList = [0] * 63
+
+        for attribute in restaurant:
+            if attribute[1] == "true":
+                currentAttributeList[dict[attribute[0]]] = 1
+            elif attribute[1] == "false":
+                currentAttributeList[dict[attribute[0]]] = 0
+            else:
+                currentAttributeList[dict[attribute[0]]] = computeSpecialValue(attribute)
+
+        attributeList.append(currentAttributeList)
+
+    return attributeList
+
+
+# Iterates over all features, and assigns an integer value for each attribute
+# Very similar to the function "assignAttributeValues", but only performs the assigning
+# on a certain list of 15 most important attributes.
+def assignPrunedAttributeValues(attributeMatrix):
+    # Create a dictionary for index lookup while passing over attributes
+    dict = {}
+    specificAttributes = {"Take-out", "Noise Level", "Takes Reservations", "street", "lot", "valet", "Has TV", "Outdoor Seating",
+                          "Attire", "Alcohol", "Good for Kids", "Good For Groups", "Price Range", "Happy Hour", "Wi-Fi"}
+
+    for i, unique in enumerate(specificAttributes):
+        dict[unique] = i
+
+    attributeList = []
+    for restaurant in attributeMatrix:
+        currentAttributeList = [0] * 15
+
+        for attribute in restaurant:
+            if dict.__contains__(attribute[0]):
+                if attribute[1] == "true":
+                    currentAttributeList[dict[attribute[0]]] = 1
+                elif attribute[1] == "false":
+                    currentAttributeList[dict[attribute[0]]] = 0
+                else:
+                    currentAttributeList[dict[attribute[0]]] = computeSpecialValue(attribute)
+
+        attributeList.append(currentAttributeList)
+
+    return attributeList
+
+
+# Determines the special value we want to assign to the attribute,
+# based on the name of the attribute.
+def computeSpecialValue(attribute):
+
+    name = attribute[0]
+    val = attribute[1]
+
+    if name == "Noise Level":
+        if val == "average":
+            return 1
+        if val == "loud":
+            return -1
+        if val == "quiet":
+            return 2
+        if val == "very_loud":
+            return -2
+
+    elif name == "Attire":
+        if val == "casual":
+            return 1
+        if val == "dressy":
+            return 2
+        if val == "formal":
+            return 3
+
+    elif name == "Alcohol":
+        if val == "none":
+            return -1
+        if val == "full_bar":
+            return 2
+        if val == "beer_and_wine":
+            return 1
+
+    elif name == "Price Range":
+        return int(val)
+
+    elif name == "Wi-Fi":
+        if val == "free":
+            return 1
+        if val == "paid":
+            return -2
+        if val == "no":
+            return -1
+
+    else:
+        return 0
+
+
+# Creates a new target list, consisting of only 1 or 0 as the value.
+# 1 is for a "Good" restaurant, consisting of 4.0 stars or higher.
+# 0 is for a "Bad" restaurant, consisting of less than 4.0 stars
+def createBinaryTargetList(starTargetList):
+    binaryTargetList = []
+    for thisStar in starTargetList:
+        if(thisStar >= 4.0):
+            binaryTargetList.append(1)
+        else:
+            binaryTargetList.append(0)
+
+    return binaryTargetList
+
 
 # Plots the % of restaurants that are succesful with respect to number of attributes.
+# Success is based on the ratio of "Good" restaurants for that given number of attributes
 # Used to determine if there is a correlation between the two
 def plotTesting(numberOfAttributes, starTargetArray, uniqueAttributes):
 
@@ -267,120 +388,76 @@ def plotTesting(numberOfAttributes, starTargetArray, uniqueAttributes):
     plt.show()
 
 
-def createBinaryAttributeList(attributeMatrix, uniqueAttributes):
-    # Create a dictionary for index lookup while passing over attributes
-    dict = {}
-    for i, unique in enumerate(uniqueAttributes):
-        dict[unique] = i
+# Plots the distribution of star ratings to better understand our dataset
+def plotStarRatingBarGraph(starTargetList):
+    numStarCount = [0] * 9
+    starRating = [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0]
+    for rating in starTargetList:
+        numStarCount[int(2*rating) - 2] += 1
 
-    binaryAttributeList = []
-    for restaurant in attributeMatrix:
-        currentAttributeList = [0] * 63
-
-        for attribute in restaurant:
-            #if attribute[0] == "Price Range":
-            #    currentAttributeList[dict[attribute[0]]] = int(attribute[1])
-            #elif attribute[1] == "true":
-            #    currentAttributeList[dict[attribute[0]]] = 1
-            #else:
-            #    currentAttributeList[dict[attribute[0]]] = 1
-            if attribute[1] == "true":
-                currentAttributeList[dict[attribute[0]]] = 1
-            elif attribute[1] == "false":
-                currentAttributeList[dict[attribute[0]]] = 0
-            else:
-                currentAttributeList[dict[attribute[0]]] = computeSpecialValue(attribute)
-
-        binaryAttributeList.append(currentAttributeList)
-
-    return binaryAttributeList
+    width = 1 / 3.0
+    plt.suptitle("Distribution of Star Ratings")
+    plt.xlabel("Star Rating")
+    plt.ylabel("Number of Restaurants")
+    plt.bar(starRating, numStarCount, width, color="blue")
+    plt.show()
 
 
-def computeSpecialValue(attribute):
+# Uses a linear regression learner to predict on Training Data, and
+# test on Testing Data. Then, uses Stochastic Gradient Descent to minimize
+# the loss and find a more predictive model
+def predictLinearRegress(attributeList, starTargetList):
 
-    name = attribute[0]
-    val = attribute[1]
+    print("\nLinear Regression")
 
-    if name == "Noise Level":
-        if val == "average":
-            return 1
-        if val == "loud":
-            return -1
-        if val == "quiet":
-            return 2
-        if val == "very_loud":
-            return -2
+    starTargetList = np.array(starTargetList)
+    Xtrain, Xtest, Ytrain, Ytest = ml.splitData(attributeList, starTargetList, 0.75)
 
-    elif name == "Attire":
-        if val == "casual":
-            return 1
-        if val == "dressy":
-            return 2
-        if val == "formal":
-            return 3
+    lr = ml.linear.linearRegress(Xtrain, Ytrain)
 
-    elif name == "Alcohol":
-        if val == "none":
-            return -1
-        if val == "full_bar":
-            return 2
-        if val == "beer_and_wine":
-            return 1
-
-    elif name == "Price Range":
-        return int(val)
-
-    elif name == "Wi-Fi":
-        if val == "free":
-            return 1
-        if val == "paid":
-            return -2
-        if val == "no":
-            return -1
-
-    else:
-        return 0
+    yHatInitial = lr.predict(Xtest)
+    print("MSE test: ", mean_squared_error(yHatInitial, Ytest))
+    print("RMSE test: ", math.sqrt(mean_squared_error(yHatInitial, Ytest)))
 
 
-def createSpecificBinaryAttributeList(attributeMatrix):
-    # Create a dictionary for index lookup while passing over attributes
-    dict = {}
-    specificAttributes = {"Take-out", "Noise Level", "Takes Reservations", "street", "lot", "valet", "Has TV", "Outdoor Seating",
-                          "Attire", "Alcohol", "Good for Kids", "Good For Groups", "Price Range", "Happy Hour", "Wi-Fi"}
+    incorrect = 0
+    total = 0
+    for i, value in enumerate(yHatInitial):
+        if(abs(yHatInitial[i] - Ytest[i]) > 0.5):
+            incorrect += 1
+        total += 1
 
-    for i, unique in enumerate(specificAttributes):
-        dict[unique] = i
-
-    binaryAttributeList = []
-    for restaurant in attributeMatrix:
-        currentAttributeList = [0] * 15
-
-        for attribute in restaurant:
-            if dict.__contains__(attribute[0]):
-                #currentAttributeList[dict[attribute[0]]] = int(attribute[1])
-                if attribute[1] == "true":
-                    currentAttributeList[dict[attribute[0]]] = 1
-                elif attribute[1] == "false":
-                    currentAttributeList[dict[attribute[0]]] = 0
-                else:
-                    currentAttributeList[dict[attribute[0]]] = computeSpecialValue(attribute)
-
-        binaryAttributeList.append(currentAttributeList)
-
-    return binaryAttributeList
+    ratioIncorrect = float(float(incorrect) / float(total))
+    print("Ratio incorrect: " + str(ratioIncorrect))
 
 
-def createBinaryTargetList(starTargetList):
-    binaryTargetList = []
-    for thisStar in starTargetList:
-        if(thisStar >= 4.0):
-            binaryTargetList.append(1)
-        else:
-            binaryTargetList.append(0)
+    onesCol = np.ones((len(Xtrain),1))
+    Xtrain = np.concatenate((onesCol, Xtrain), 1)
+    onesCol = np.ones((len(Xtest),1))
+    Xtest = np.concatenate((onesCol, Xtest), 1)
+    m, n = np.shape(Xtrain)
 
-    return binaryTargetList
+    clf = SGDRegressor(loss="squared_loss")
+    clf.fit(Xtrain, Ytrain)
+    yHat = clf.predict(Xtest)
+
+    print("MSE after GD: ", mean_squared_error(yHat, Ytest))
+    print("RMSE after GD: ", math.sqrt(mean_squared_error(yHat, Ytest)))
+
+    incorrect = 0
+    total = 0
+    for i, value in enumerate(yHat):
+        if(abs(yHat[i] - Ytest[i]) > 0.5):
+            incorrect += 1
+        total += 1
+
+    ratioIncorrect = float(float(incorrect) / float(total))
+    print("Ratio incorrect: " + str(ratioIncorrect))
 
 
+# Gradient descent function that calculates current loss and changes
+# learner parameters to increase accuracy. Similar to the scipy call
+# in the above method.
 def gradientDescent(x, y, theta, alpha, m, numIterations):
     y = y[:,np.newaxis]
 
@@ -397,6 +474,9 @@ def gradientDescent(x, y, theta, alpha, m, numIterations):
         # But to be consistent with the gradient, I include it)
         cost = np.sum(loss) / (m)
 
+        if(i % 100 == 0):
+            print("Iter " + str(i) + ": " + str(cost))
+
         # avg gradient per example
         gradient = np.dot(loss, x)
         #gradient = gradient * -2
@@ -408,99 +488,132 @@ def gradientDescent(x, y, theta, alpha, m, numIterations):
     return theta
 
 
-def predictLinearRegress(binaryAttributeList, starTargetList):
+# Uses a K nearest neighbors learner to predict on Training Data,
+# and test on Testing Data.
+def predictKNN(attributeList, starTargetList):
+
+    print("\nKNN")
+
+    K = [1]#, 20, 50, 100, 500, 1000, 1500, 2000]
+    starTargetList = np.array(starTargetList)
+    Xtrain, Xtest, Ytrain, Ytest = ml.splitData(attributeList, starTargetList, 0.75)
+
+    for i in range(0, 1):
+        knn = ml.knn.knnClassify()
+        knn.train(Xtrain, Ytrain, K[i])
+        YtestHat = knn.predict(Xtest)
+
+        total = 0
+        numIncorrect = 0
+        for i, value in enumerate(Ytest):
+            if abs(Ytest[i] - YtestHat[i]) > 0.5:
+                numIncorrect += 1
+            total += 1
+
+
+        print("MSE test: ", mean_squared_error(YtestHat, Ytest))
+        print("RMSE test: ", math.sqrt(mean_squared_error(YtestHat, Ytest)))
+        print("Ratio Incorrect: " + str(float(numIncorrect / total)))
+
+
+# Uses a Random Forests learner to fit a model on Training Data,
+# and test on Testing Data.
+def predictRandomForests(attributeList, starTargetList):
+
+    print("\nRandom Forests")
 
     starTargetList = np.array(starTargetList)
-    Xtrain, Xtest, Ytrain, Ytest = ml.splitData(binaryAttributeList, starTargetList, 0.75)
+    Xtrain, Xtest, Ytrain, Ytest = ml.splitData(attributeList, starTargetList, 0.75)
 
-    lr = ml.linear.linearRegress(Xtrain, Ytrain)
+    RFModel = RandomForestRegressor(n_estimators=200)
+    RFModel.fit(Xtrain, Ytrain)
+    yHat = RFModel.predict(Xtest)
 
-    yHatInitial = lr.predict(Xtest)
-
-    correct = 0
     total = 0
-    for i, value in enumerate(yHatInitial):
-        if value >= 4.0 and Ytest[i] >= 4.0:
-            correct += 1
-        elif value < 4.0 and Ytest[i] < 4.0:
-            correct += 1
-
+    numIncorrect = 0
+    for i, value in enumerate(Ytest):
+        if abs(Ytest[i] - yHat[i]) > 0.5:
+            numIncorrect += 1
         total += 1
 
-    ratioCorrect = float(float(correct) / float(total))
-    print("Ratio correct: " + str(ratioCorrect))
+    print("MSE Test: ", mean_squared_error(yHat, Ytest))
+    print("RMSE Test: ", math.sqrt(mean_squared_error(yHat, Ytest)))
+    print("Ratio Incorrect: " + str(float(numIncorrect / total)))
 
 
+# Uses Extreme Gradient Boosting to fit a model on Training Data, and
+# test on Testing Data.
+def predictXGBoosting(attributeList, starTargetList):
 
-    onesCol = np.ones((len(Xtrain),1))
-    Xtrain = np.concatenate((onesCol, Xtrain), 1)
+    print("\nExtreme Gradient Boosting")
 
-    m, n = np.shape(Xtrain)
-    print(str(m) + " " + str(n))
+    starTargetList = np.array(starTargetList)
+    Xtrain, Xtest, Ytrain, Ytest = ml.splitData(attributeList, starTargetList, 0.75)
 
-    #Use the calculated theta values to repeatedly do gradient descent
-    newThetas = gradientDescent(Xtrain, Ytrain, lr.theta, 0.1, m, 2000)
+    xgb_model = xgboost.XGBRegressor(missing=np.nan, max_depth=11, n_estimators=400, learning_rate=0.03, nthread=4, subsample=0.85, colsample_bytree=0.75, seed=4242)
+    xgb_model.fit(Xtrain, Ytrain, early_stopping_rounds=20, eval_metric="rmse", eval_set=[(Xtest, Ytest)])
 
+    yHat = xgb_model.predict(Xtest)
 
-    lr.theta = newThetas
-    yHat = lr.predict(Xtest)
-
-
-    correct = 0
     total = 0
-    for i, value in enumerate(yHat):
-        if value >= 4.0 and Ytest[i] >= 4.0:
-            correct += 1
-        elif value < 4.0 and Ytest[i] < 4.0:
-            correct += 1
+    numIncorrect = 0
+    for i, value in enumerate(Ytest):
+        if abs(Ytest[i] - yHat[i]) > 0.5:
+            numIncorrect += 1
         total += 1
 
-    ratioCorrect = float(float(correct) / float(total))
-    print("Ratio correct: " + str(ratioCorrect))
-
-
-
-def plotStarRatingBarGraph(starTargetList):
-    numStarCount = [0] * 9
-    starRating = [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0]
-    for rating in starTargetList:
-        numStarCount[int(2*rating) - 2] += 1
-
-    width = 1 / 3.0
-    plt.suptitle("Distribution of Star Ratings")
-    plt.xlabel("Star Rating")
-    plt.ylabel("Number of Restaurants")
-    plt.bar(starRating, numStarCount, width, color="blue")
-    plt.show()
-
+    print("MSE Test: ", mean_squared_error(yHat, Ytest))
+    print("RMSE Test: ", math.sqrt(mean_squared_error(yHat, Ytest)))
+    print("Ratio Incorrect: " + str(float(numIncorrect / total)))
 
 
 if __name__ == '__main__':
+
     #Load in business file
     businessFile = open(os.getcwd() + "/yelp_academic_dataset_business.json", "r")
     #Find the subset of businesses that are restaurants
-    restaurantList = findRestaurants(businessFile)
+    restaurantList = findRestaurantSubset(businessFile)
 
-    # Find the subset of each restaurant's data that contains the attributes
+    # Parse the restaurant's data for attribute text
     dirtyAttributeList = findDirtyAttributeList(restaurantList)
     # Further parse the dirtyAttributeArray for specific attributes to create our matrix
     attributeMatrix = parseForAttributes(dirtyAttributeList)
 
-
+    # Finds the unique attributes within our dataset
     uniqueAttributes = determineUnique(attributeMatrix, restaurantList)
-    binaryAttributeList = np.array(createBinaryAttributeList(attributeMatrix, uniqueAttributes))
-    #binaryAttributeList = np.array(createSpecificBinaryAttributeList(attributeMatrix))
+    # Creates the necessary attribute lists
+    attributeList = np.array(assignAttributeValues(attributeMatrix, uniqueAttributes))
+    prunedAttributeList = np.array(assignPrunedAttributeValues(attributeMatrix))
 
-
+    # Creates the necessary target lists
     starTargetList = createTargetList(restaurantList)
     binaryTargetList = np.array(createBinaryTargetList(starTargetList))
 
-    plotStarRatingBarGraph(starTargetList)
 
-    #numberOfAttributes = determineNumAttributes(attributeMatrix)
-    #plotTesting(numberOfAttributes, starTargetList, uniqueAttributes)
+    #PREDICTIONS
+    #-----------
 
-    #predictLinearRegress(binaryAttributeList, starTargetList)
+    predictLinearRegress(attributeList, starTargetList)
+    predictKNN(attributeList, starTargetList)
+    predictRandomForests(attributeList, starTargetList)
+    predictXGBoosting(attributeList, starTargetList)
+
+
+    """
+    PLOTTING
+    --------
+        numberOfAttributes = determineNumAttributes(attributeMatrix)
+        plotTesting(numberOfAttributes, starTargetList, uniqueAttributes)
+        plotStarRatingBarGraph(starTargetList)
+    """
+
+
+
+
+
+
+
+
 
     """
     Bayes
@@ -514,28 +627,3 @@ if __name__ == '__main__':
 
     print(YtestHat.shape)
     """
-
-
-
-    """
-    KNN
-    ----
-
-
-    K = [1]#, 20, 50, 100, 500, 1000, 1500, 2000]
-
-    for i in range(0, 1):
-        knn = ml.knn.knnClassify()
-        knn.train(Xtrain, Ytrain, K[i])
-        YtestHat = knn.predict(Xtrain)
-
-        total = 0
-        numCorrect = 0
-        for i, value in enumerate(Ytest):
-            #print(str(Ytest[i]) + " == " + str(YtestHat[i]))
-            if abs(Ytest[i] - YtestHat[i]) <= 0.5:
-                numCorrect += 1
-            total += 1
-
-        print("   -->   Total correct: " + str(float(numCorrect / total)))
-"""
